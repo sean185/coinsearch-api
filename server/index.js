@@ -9,22 +9,25 @@ const _ = require('lodash');
 
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(bodyParser.urlencoded({
-	extended: true
+    extended: true
 }));
 app.use(compression());
 app.use(cors());
 
 // handling coinsearch backend data
 var cachedData = null
+function snakeCaseProps(obj) {
+    return _.mapKeys(obj, (val, k) => _.snakeCase(k))
+}
 const data_path = path.join(__dirname, '..', 'data')
 const json_file_path = path.join(data_path, 'coinsearch.json')
 if (fs.existsSync(json_file_path)) {
     fs.readFile(json_file_path, 'utf8', (err, data) => {
         if (err) throw err;
-        cachedData = JSON.parse(data);
+        cachedData = JSON.parse(data).map( (item) => snakeCaseProps(item) );
     });
 }
-app.post('/upload', (req, res) => {
+app.post('/api/upload', (req, res) => {
     console.log('POST /');
     if (!!req.body.title) {
         const fpath = path.join(__dirname, '..', 'data', req.body.title + '.json')
@@ -39,27 +42,43 @@ app.post('/upload', (req, res) => {
     res.end('thanks');
 });
 
-app.get('/data/keys', (req, res) => {
-	const keys = Object.keys(cachedData[0])
-	res.send(keys);
+app.get('/api/keys', (req, res) => {
+    const keys = Object.keys(cachedData[0])
+    res.send(keys);
 })
 
-app.get('/data/brief', (req, res) => {
-	const fields = ["No. (HC)","Name (HC)","Symbol","Type","Chaintype","Consensus","Hash"]
-	const result = cachedData.map((item) => {
-		var subset = _.pick(item, fields);
-		return _.mapKeys(subset, (val, k) => _.snakeCase(k))
-	})
-	res.send(result);
+app.get('/api/brief', (req, res) => {
+    const fields = ["no_hc","name_hc","symbol","type","chaintype","consensus","hash"]
+    const result = cachedData.map((item) => {
+        var subset = _.pick(item, fields);
+        return snakeCaseProps(subset);
+    })
+    res.send(result);
 })
 
-app.get('/data/all', (req, res) => {
-	res.send(cachedData);
+app.get('/api/all', (req, res) => {
+    res.send(cachedData);
 })
 
-app.get('/data/coin/:coin_name', (req, res) => {
-	const coin = _.find(cachedData, (item) => item['Name (HC)'].toLowerCase() == req.params.coin_name);
-	res.send(coin);
+// get details of a particular coin
+app.get('/api/d/:name', (req, res) => {
+    const detail = _.find(cachedData, (item) => item['name_hc'].toLowerCase() == req.params.name.toLowerCase());
+    res.send(detail);
+})
+
+// get coins of a particular category
+app.get('/api/category', (req, res) => {
+	const conds = req.query
+    const details = _.filter(cachedData, (item) => {
+		return _.every(_.map(conds, (v, k) => {
+			if (v[0] != '!')
+				return item[k] == 'Yes' || item[k] == v
+			else
+				return !(item[k] == 'Yes' || item[k] == v) && item[k] != ''
+			// assume blank fields not even considered in this scope
+		}))
+    });
+    res.send(details);
 })
 
 // serving coinsearch app
