@@ -4,6 +4,7 @@ var compression = require('compression');
 var fs = require('fs');
 var path = require('path');
 var app = express();
+var cors = require('cors')
 const _ = require('lodash');
 
 app.use(bodyParser.json({ limit: '5mb' }));
@@ -11,6 +12,7 @@ app.use(bodyParser.urlencoded({
 	extended: true
 }));
 app.use(compression());
+app.use(cors());
 
 // handling coinsearch backend data
 var cachedData = null
@@ -43,16 +45,21 @@ app.get('/data/keys', (req, res) => {
 })
 
 app.get('/data/brief', (req, res) => {
-	const fields = ["No. (HC)","Name (HC)","Symbol","Brief Explanation","Type","Chaintype","Consensus","Hash"]
+	const fields = ["No. (HC)","Name (HC)","Symbol","Type","Chaintype","Consensus","Hash"]
 	const result = cachedData.map((item) => {
 		var subset = _.pick(item, fields);
-		return _.mapKeys(subset, (val, k) => _.kebabCase(k))
+		return _.mapKeys(subset, (val, k) => _.snakeCase(k))
 	})
 	res.send(result);
 })
 
 app.get('/data/all', (req, res) => {
 	res.send(cachedData);
+})
+
+app.get('/data/coin/:coin_name', (req, res) => {
+	const coin = _.find(cachedData, (item) => item['Name (HC)'].toLowerCase() == req.params.coin_name);
+	res.send(coin);
 })
 
 // serving coinsearch app
